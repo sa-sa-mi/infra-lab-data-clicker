@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; base-uri 'none'; form-action 'none'">
+  <title>INFRA / LAB DATA CLICKER Base 0.2</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --canvas: #0a1119;
+      --panel: #101c28;
+      --raised: #152432;
+      --line: #2a3c4b;
+      --ink: #e7f1f6;
+      --muted: #a0b4c4;
+      --accent: #7fe3c6;
+      --price: #f0cb83;
+      --row-size: 64px;
+      font-family: system-ui, -apple-system, "Yu Gothic", Meiryo, sans-serif;
+      font-size: 14px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--canvas); }
+    button, input, textarea, select { font: inherit; }
+    button { color: inherit; cursor: pointer; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, h2:focus-visible {
+      outline: 2px solid #a0efff;
+      outline-offset: 2px;
+    }
+    button:disabled, button[aria-disabled="true"] { cursor: default; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .symbols { position: absolute; width: 0; height: 0; }
+    .app {
+      width: min(100%, 1880px);
+      height: 100vh;
+      height: 100dvh;
+      min-height: 365px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+    .header, .header-actions, .brand { display: flex; align-items: center; }
+    .header {
+      justify-content: space-between;
+      gap: 8px 18px;
+      flex-wrap: wrap;
+      padding: 10px 22px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { gap: 10px; }
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      color: var(--accent);
+      background: #142e32;
+      border: 1px solid #37685f;
+      border-radius: 9px;
+    }
+    .brand-mark svg { width: 22px; height: 22px; }
+    .brand h1 { margin: 0; font-size: 1.02rem; letter-spacing: .14em; }
+    .brand small { display: block; margin-top: 2px; color: var(--muted); font-size: .71rem; letter-spacing: .09em; }
+    .header-actions { gap: 7px; flex-wrap: wrap; }
+    .save-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 5px;
+      color: var(--muted);
+      white-space: nowrap;
+      font-size: .8rem;
+    }
+    .save-status::before { content: ""; width: 6px; height: 6px; background: #91abbb; border-radius: 50%; }
+    .save-status[data-state="saved"]::before { background: var(--accent); }
+    .save-status[data-state="failed"] { color: #ffc0ad; }
+    .save-status[data-state="failed"]::before { background: #ffc0ad; }
+    .sub-button, .pager button, .modal button {
+      min-height: 34px;
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--raised);
+      font-weight: 650;
+    }
+    .sub-button:hover, .pager button:hover:not(:disabled), .modal button:hover { background: #233746; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(240px, .81fr) minmax(326px, 1.12fr) minmax(310px, 1fr);
+      gap: 12px;
+      padding: 14px 18px 16px;
+      min-width: 0;
+      min-height: 0;
+    }
+    .panel {
+      min-width: 0;
+      min-height: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 13px;
+    }
+    .generator {
+      display: grid;
+      grid-template-rows: auto minmax(115px, 1fr) auto auto;
+      gap: 14px;
+      padding: 19px;
+      background: radial-gradient(ellipse at 50% 44%, #142934, var(--panel) 69%);
+    }
+    .readout { min-width: 0; text-align: center; container-type: inline-size; }
+    .balance-label { display: block; color: var(--muted); font-size: .87rem; }
+    .balance {
+      display: block;
+      font-size: clamp(2.05rem, 16.5cqw, 4rem);
+      line-height: 1.16;
+      font-variant-numeric: tabular-nums;
+      font-weight: 780;
+      letter-spacing: -.05em;
+      overflow-wrap: anywhere;
+    }
+    .rate {
+      display: inline-flex;
+      gap: 6px;
+      margin-top: 5px;
+      align-items: baseline;
+      font-size: 1.16rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+    }
+    .rate-unit { color: var(--muted); font-size: .78rem; }
+    .hero { position: relative; min-width: 0; min-height: 0; display: grid; place-items: center; container-type: size; }
+    .big-click {
+      width: min(76cqw, 91cqh, 248px);
+      aspect-ratio: 1;
+      padding: 9px;
+      display: grid;
+      justify-items: center;
+      align-content: center;
+      gap: 5px;
+      border: 1px solid #78dbc7;
+      border-radius: 50%;
+      background: radial-gradient(circle at 38% 27%, #286b65, #15434c 66%, #112d3a);
+      color: #edfff9;
+      box-shadow: 0 0 0 8px #64e6cb11, 0 0 0 19px #64e6cb08, inset 0 0 32px #68dccb18;
+      user-select: none;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: background-color .15s, border-color .15s, transform .12s;
+    }
+    .big-click:hover { border-color: #bcffea; background: radial-gradient(circle at 38% 27%, #327d73, #19545a 66%, #133a45); }
+    .big-click:active { transform: scale(.965); }
+    .big-click svg { width: clamp(36px, 29cqw, 82px); height: auto; color: #b0f5e0; }
+    .click-label { font-size: 1rem; font-weight: 750; letter-spacing: .08em; }
+    .click-value { color: #b7f8e4; font-size: .93rem; font-weight: 720; font-variant-numeric: tabular-nums; }
+    .bonus {
+      position: absolute;
+      top: 4px;
+      right: 0;
+      width: 44px;
+      height: 44px;
+      z-index: 2;
+      border: 1px solid #f0d599;
+      border-radius: 50%;
+      background: #514025;
+      color: #ffe6a3;
+      font-size: 1.56rem;
+      box-shadow: 0 0 18px #f6d58a44;
+      animation: signal 1.5s ease-in-out 3;
+    }
+    .bonus:hover { background: #735b35; }
+    .float {
+      position: absolute;
+      left: 50%;
+      top: 29%;
+      z-index: 3;
+      color: #e1fff3;
+      text-shadow: 0 1px 4px #07151b;
+      pointer-events: none;
+      font-size: 1.18rem;
+      font-weight: 820;
+      animation: rise .65s ease-out forwards;
+    }
+    @keyframes rise { from { transform: translate(-50%, 0); opacity: 1; } to { transform: translate(-50%, -36px); opacity: 0; } }
+    @keyframes signal { 50% { box-shadow: 0 0 20px #f6d58a77; } }
+    .mini-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 0;
+    }
+    .mini-stats div { min-width: 0; border-top: 1px solid var(--line); padding: 9px 0 0; }
+    dt { color: var(--muted); font-size: .82rem; }
+    dd { margin: 3px 0 0; font-size: 1.14rem; font-weight: 720; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .trend { margin: 0; min-width: 0; border-top: 1px solid var(--line); padding-top: 8px; }
+    .trend figcaption { font-size: .77rem; color: var(--muted); }
+    .trend svg { display: block; width: 100%; height: 48px; margin-top: 3px; }
+
+    .store {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) 33px;
+      gap: 8px;
+      padding: 12px;
+    }
+    .panel-head { display: flex; gap: 7px 10px; justify-content: space-between; align-items: center; flex-wrap: wrap; min-height: 36px; }
+    .panel-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 1.14rem; letter-spacing: .04em; }
+    .bulk { display: inline-flex; flex-wrap: wrap; gap: 3px; padding: 3px; background: #0b1621; border: 1px solid var(--line); border-radius: 8px; }
+    .bulk button, .compact-switch button {
+      min-height: 28px;
+      min-width: 35px;
+      padding: 2px 7px;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--muted);
+      font-size: .81rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .bulk button[aria-pressed="true"], .compact-switch button[aria-pressed="true"] { background: #23434a; color: #e5fff6; border-color: #416b6a; }
+    .bulk button:hover, .compact-switch button:hover { color: var(--ink); }
+    .upgrade-count {
+      min-width: 24px;
+      padding: 2px 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      text-align: center;
+      color: var(--muted);
+      font-size: .87rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .upgrade-count.ready { color: #c7fbe8; border-color: #4b9e82; background: #193c36; }
+    .shop-list { display: grid; grid-auto-rows: var(--row-size); align-content: start; gap: 6px; min-width: 0; min-height: 0; overflow: auto; }
+    .shop-row {
+      width: 100%;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 35px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 8px;
+      border: 1px solid #304452;
+      border-radius: 8px;
+      background: var(--raised);
+      text-align: left;
+    }
+    .shop-row:focus-visible { outline-offset: -2px; }
+    .shop-row.ready { border-color: #509780; background: #19342f; }
+    .shop-row.ready:hover { background: #224139; border-color: #8ed3ba; }
+    .shop-row.ready:active { background: #2d4d45; }
+    .shop-row.locked { border-style: dashed; background: #101b25; }
+    .row-icon {
+      display: grid;
+      place-items: center;
+      width: 35px;
+      height: 35px;
+      border-radius: 7px;
+      background: #0f1a24;
+      font-size: 1.19rem;
+      line-height: 1;
+    }
+    .ready .row-icon { background: #142924; }
+    .row-main, .row-name, .row-effect { min-width: 0; display: block; }
+    .row-name { font-weight: 710; line-height: 1.21; overflow-wrap: anywhere; }
+    .row-effect { margin-top: 4px; color: var(--muted); font-size: .79rem; line-height: 1.17; overflow-wrap: anywhere; }
+    .row-values { display: grid; justify-items: end; gap: 3px; text-align: right; font-variant-numeric: tabular-nums; }
+    .row-count { color: #c8d8e1; font-size: .8rem; line-height: 1.15; white-space: nowrap; }
+    .row-cost { color: var(--price); font-weight: 730; white-space: nowrap; font-size: .93rem; }
+    .row-cost svg { width: 13px; height: 13px; vertical-align: -.14em; margin-left: 3px; }
+    .row-qty { color: var(--muted); font-size: .77rem; font-weight: 650; margin-right: 4px; }
+    .ready .row-effect { color: #c1e9db; }
+    .ready .row-cost { color: #ffe2a6; }
+    .ready-mark { color: var(--accent); font-weight: 800; font-size: .83rem; }
+    .locked .row-name { color: #c3d2de; }
+    .empty-store { display: flex; min-height: 54px; gap: 8px; align-items: center; justify-content: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; }
+    .pager { display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .pager.inactive { visibility: hidden; }
+    .pager button { min-height: 28px; min-width: 33px; padding: 0 8px; font-size: 1.1rem; }
+    .pager button:disabled { color: #7e94a5; background: #111e29; }
+    .pager select { min-height: 28px; padding: 1px 3px; border: 1px solid var(--line); border-radius: 6px; background: var(--raised); color: #dce7ee; font-size: .83rem; font-variant-numeric: tabular-nums; cursor: pointer; }
+    .compact-switch { display: none; }
+
+    .toast-area {
+      position: fixed;
+      inset: auto 12px 12px auto;
+      z-index: 5;
+      display: grid;
+      justify-items: end;
+      gap: 5px;
+      max-width: min(420px, calc(100vw - 24px));
+      pointer-events: none;
+    }
+    .toast { padding: 8px 12px; border: 1px solid #466777; border-radius: 8px; background: #122534; color: var(--ink); box-shadow: 0 4px 18px #0007; overflow-wrap: anywhere; }
+    .modal {
+      width: min(520px, calc(100% - 20px));
+      max-height: calc(100dvh - 22px);
+      overflow: auto;
+      padding: 15px;
+      color: var(--ink);
+      background: var(--panel);
+      border: 1px solid #4a6577;
+      border-radius: 12px;
+    }
+    .modal::backdrop { background: #03090ed9; }
+    .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+    .modal h2, .modal h3 { margin: 0; font-size: 1.22rem; }
+    .modal h3 { font-size: 1rem; margin: 14px 0 7px; }
+    .modal-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0; }
+    .modal .danger { border-color: #96606a; color: #ffd8df; }
+    .modal .check { display: flex; align-items: center; gap: 7px; margin: 12px 0; }
+    .modal textarea, .modal input[type="file"] { display: block; width: 100%; max-width: 100%; margin: 6px 0; }
+    .modal textarea { min-height: 90px; background: #0a1520; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 7px; resize: vertical; }
+    .modal p { line-height: 1.5; color: var(--muted); }
+    .modal p.error:not(:empty) { color: #ffc0ad; }
+    .modal p.error:empty { display: none; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr)); gap: 7px; margin: 0; }
+    .stats div { min-width: 0; padding: 6px; border: 1px solid var(--line); border-radius: 6px; }
+    .stats dd { font-size: .95rem; }
+    .achievements { display: flex; flex-wrap: wrap; gap: 5px; }
+    .achievement { padding: 4px 7px; border: 1px solid #376255; border-radius: 5px; background: #19342e; font-size: .84rem; }
+    .achievement.locked { color: var(--muted); border-color: var(--line); background: var(--raised); }
+    details { margin-top: 13px; color: var(--muted); }
+    summary { cursor: pointer; }
+
+    @media (max-width: 950px), (max-height: 555px) {
+      .workspace { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto minmax(0, 1fr); gap: 8px; padding: 8px; }
+      .generator { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(100px, .85fr); grid-template-rows: auto auto; gap: 3px 10px; padding: 8px 10px; }
+      .readout { text-align: left; }
+      .balance { font-size: clamp(1.38rem, 5cqw, 2.25rem); }
+      .rate { margin-top: 1px; font-size: .95rem; }
+      .rate-unit, .balance-label { font-size: .76rem; }
+      .hero { grid-column: 2; grid-row: 1 / 3; container-type: normal; display: flex; justify-content: flex-end; gap: 5px; }
+      .big-click { width: min(100%, 188px); min-height: 44px; aspect-ratio: auto; border-radius: 9px; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 5px; row-gap: 0; box-shadow: none; padding: 4px 6px; }
+      .big-click svg { grid-row: 1 / 3; width: 29px; }
+      .click-value { font-size: .84rem; overflow-wrap: anywhere; }
+      .bonus { position: static; width: 34px; height: 34px; flex: 0 0 34px; font-size: 1.15rem; }
+      .mini-stats { grid-column: 1; grid-row: 2; display: flex; flex-wrap: wrap; gap: 1px 10px; }
+      .mini-stats div { border: 0; padding: 0; display: flex; align-items: baseline; gap: 4px; }
+      .mini-stats dt, .mini-stats dd { font-size: .76rem; margin: 0; }
+      .trend { display: none; }
+      .float { left: 70%; top: 6%; }
+      .store { padding: 8px; gap: 6px; grid-template-rows: auto minmax(0, 1fr) 28px; }
+      .header { padding: 6px 10px; }
+    }
+    @media (max-width: 720px) {
+      .workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); }
+      .compact-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+      .compact-switch button { border-color: var(--line); background: var(--panel); min-height: 31px; font-size: .93rem; }
+      .compact-switch .upgrade-count { display: inline-block; margin-left: 4px; padding-block: 0; }
+      #upgradeCount { display: none; }
+      [data-view="buildings"] #upgradePanel, [data-view="upgrades"] #buildingPanel { display: none; }
+    }
+    @media (max-width: 435px) {
+      .header { gap: 5px; }
+      .brand { gap: 6px; }
+      .brand-mark { width: 27px; height: 27px; }
+      .brand-mark svg { width: 16px; height: 16px; }
+      .brand h1 { font-size: .87rem; }
+      .brand small { font-size: .63rem; letter-spacing: .03em; }
+      .header-actions { gap: 4px; }
+      .sub-button { min-height: 30px; padding-inline: 5px; font-size: .81rem; }
+      .save-status { font-size: .71rem; gap: 3px; padding-inline: 2px; }
+      .shop-row { grid-template-columns: 29px minmax(0, 1fr) auto; gap: 6px; padding-inline: 5px; }
+      .row-icon { width: 29px; height: 29px; font-size: 1rem; }
+      .row-name { font-size: .94rem; }
+    }
+    @media (max-height: 425px) {
+      :root { --row-size: 52px; }
+      .app { min-height: 342px; }
+      .header { padding-block: 5px; }
+      .workspace { gap: 5px; padding: 5px; }
+      .generator { padding: 5px 8px; }
+      .store { grid-template-rows: auto minmax(0, 1fr) 28px; gap: 4px; padding: 6px; }
+      .shop-row { padding-block: 3px; }
+      .row-effect { margin-top: 2px; }
+      .compact-switch button { min-height: 28px; }
+      .panel-head { min-height: 29px; }
+      .bulk { padding: 2px; }
+      .bulk button { min-height: 23px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+      .float { display: none; }
+    }
+    .reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+    .reduce-motion .float { display: none; }
+  </style>
+</head>
+<body>
+  <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="data-symbol" viewBox="0 0 48 48">
+      <path d="m24 6 17 9.6L24 25 7 15.6 24 6Zm-17 17L24 33l17-10M7 31l17 10 17-10" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+    </symbol>
+  </svg>
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><svg><use href="#data-symbol"/></svg></span>
+        <div><h1>INFRA / LAB</h1><small>DATA CLICKER · BASE 0.2</small></div>
+      </div>
+      <div class="header-actions">
+        <span class="save-status" id="saveStatus" role="status">未保存</span>
+        <button type="button" class="sub-button" id="statsButton">記録</button>
+        <button type="button" class="sub-button" id="settingsButton">保存・設定</button>
+      </div>
+    </header>
+    <main class="workspace" id="workspace" data-view="buildings">
+      <section class="panel generator" aria-label="データ生成">
+        <div class="readout">
+          <span class="balance-label">データ</span>
+          <strong class="balance" id="balance">0</strong>
+          <div class="rate"><strong id="rate">0</strong><span class="rate-unit">/ 秒</span></div>
+        </div>
+        <div class="hero" id="hero">
+          <button type="button" class="big-click" id="clickButton" aria-label="データを生成">
+            <svg aria-hidden="true" viewBox="0 0 48 48"><use href="#data-symbol"/></svg>
+            <span class="click-label">生成</span><span class="click-value" id="clickValue">+1</span>
+          </button>
+          <button type="button" class="bonus" id="bonusButton" aria-label="ボーナスを獲得" title="ボーナス" hidden>✦</button>
+        </div>
+        <dl class="mini-stats">
+          <div><dt>累計データ</dt><dd id="lifetime">0</dd></div>
+          <div><dt>施設数</dt><dd id="ownedTotal">0</dd></div>
+        </dl>
+        <figure class="trend">
+          <figcaption>生産推移</figcaption>
+          <svg viewBox="0 0 420 150" preserveAspectRatio="none" aria-label="最近の毎秒生産量" role="img">
+            <defs><linearGradient id="chartFill" x2="0" y2="1"><stop offset="0" stop-color="#7fe3c6" stop-opacity=".25"/><stop offset="1" stop-color="#7fe3c6" stop-opacity="0"/></linearGradient></defs>
+            <path id="chartArea" fill="url(#chartFill)" d="M0 150 L420 150"/>
+            <path id="chartLine" stroke="#7fe3c6" stroke-width="2" fill="none" vector-effect="non-scaling-stroke" d="M0 138 L420 138"/>
+          </svg>
+        </figure>
+      </section>
+      <nav class="compact-switch" aria-label="購入一覧">
+        <button type="button" id="showBuildings" aria-controls="buildingPanel" aria-pressed="true">施設</button>
+        <button type="button" id="showUpgrades" aria-controls="upgradePanel" aria-pressed="false">強化 <span id="compactUpgradeCount" class="upgrade-count" title="購入可能な強化">0</span></button>
+      </nav>
+      <section class="panel store" id="buildingPanel" aria-labelledby="buildingTitle">
+        <div class="panel-head">
+          <h2 id="buildingTitle" tabindex="-1">施設</h2>
+          <div class="bulk" role="group" aria-label="まとめ買い">
+            <button type="button" data-bulk="1" aria-pressed="true">×1</button>
+            <button type="button" data-bulk="10" aria-pressed="false">×10</button>
+            <button type="button" data-bulk="100" aria-pressed="false">×100</button>
+            <button type="button" data-bulk="max" aria-pressed="false">最大</button>
+          </div>
+        </div>
+        <div class="shop-list" id="buildingList"></div>
+        <nav class="pager inactive" id="buildingPages" aria-label="施設のページ">
+          <button type="button" data-page="-1" aria-label="施設 前のページ">‹</button>
+          <select data-page-select aria-label="施設のページ番号"></select>
+          <button type="button" data-page="1" aria-label="施設 次のページ">›</button>
+        </nav>
+      </section>
+      <section class="panel store" id="upgradePanel" aria-labelledby="upgradeTitle">
+        <div class="panel-head"><h2 id="upgradeTitle" tabindex="-1">強化 <span id="upgradeCount" class="upgrade-count" title="購入可能な強化">0</span></h2></div>
+        <div class="shop-list" id="upgradeList"></div>
+        <nav class="pager inactive" id="upgradePages" aria-label="強化のページ">
+          <button type="button" data-page="-1" aria-label="強化 前のページ">‹</button>
+          <select data-page-select aria-label="強化のページ番号"></select>
+          <button type="button" data-page="1" aria-label="強化 次のページ">›</button>
+        </nav>
+      </section>
+    </main>
+  </div>
+  <div class="toast-area" id="toasts" role="status" aria-live="polite"></div>
+  <dialog class="modal" id="dialog" aria-labelledby="dialogTitle">
+    <div class="modal-head"><h2 id="dialogTitle"></h2><button type="button" id="closeModal">閉じる</button></div>
+    <div id="modalContent"></div>
+  </dialog>
+  <script>
+(() => {
+  "use strict";
+  const KEY = "infra-lab-data-clicker-base-02";
+  const BACKUP = KEY + "-backup";
+  const $ = id => document.getElementById(id);
+  const whole = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
+  const tenth = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 });
+  let mode = "1", state, history = [];
+  let lastPaint = 0, lastShopPaint = 0, lastChart = 0, lastAuto = 0;
+  let nextBonus = Date.now() + 60000, bonusActive = false, bonusExpiry = 0;
+
+const BUILDINGS=[
+['マクロ','⌨️',15,0.1,'最小限の手順を自動実行'],['スクリプト','📜',100,1,'データの生成をまとめて処理'],['ボット','🤖',1100,8,'休まずデータを収集'],['サーバー','🖥️',12000,47,'大量の処理を引き受ける'],['クラスター','🔗',130000,260,'複数の計算を束ねる'],['データセンター','🏢',1.4e6,1400,'一つの拠点から巨大な生産'],['CDN','🌐',20e6,7800,'世界へデータを届ける'],['クラウド基盤','☁️',330e6,44000,'無数の生産を支える'],['AIオペレーター','🧠',5.1e9,260000,'仕事の流れそのものを加速'],['自律ネットワーク','🕸️',75e9,1.6e6,'自ら最適化する情報網'],['量子ルータ','💠',1e12,10e6,'次元を超える高速通信'],['惑星通信網','🪐',14e12,70e6,'惑星を覆う巨大な情報網'],['恒星間中継','✨',180e12,500e6,'星々をつなぐデータの道'],['情報宇宙','🌌',2.3e15,4e9,'すべての情報をつなぐ']];
+const LEVELS=[1,5,10,25,50,100,200];const FACTORS=[12,70,350,2000,12000,100000,1200000];const UPG=[];const clickLevels=[{n:20,cost:50,m:2,name:'入力アシスト'},{n:200,cost:500,m:2,name:'高速タイピング'},{n:2000,cost:5000,m:2,name:'入力の並列化'},{n:10000,cost:60000,m:2,name:'一括データ化'},{n:200000,cost:500000,m:2,name:'高速入力回路'},{n:1e7,cost:7e6,m:2,name:'極限の手動入力'}];
+clickLevels.forEach((o,i)=>UPG.push({id:'click'+i,name:o.name,ico:'👆',description:`クリックのデータ獲得量 ×${o.m}`,cost:o.cost,unlocked:s=>s.lifetimeClicks>=o.n,kind:'click',factor:o.m}));
+BUILDINGS.forEach((b,i)=>LEVELS.forEach((n,j)=>UPG.push({id:`b${i}_${n}`,name:`${b[0]}・${['起動調整','処理の効率化','高速実行','次世代仕様','大量処理','超高速処理','究極の実行'][j]}`,ico:b[1],description:`${b[0]}の生産量 ×2（所有${n}台で解放）`,cost:b[2]*FACTORS[j],unlocked:s=>s.buildings[i]>=n,kind:'building',building:i,factor:2})));
+[25,100,250,500,1000].forEach((n,i)=>UPG.push({id:'global'+n,name:['通信の共通規格','効率化プロトコル','超大規模連携','情報の標準化','無限の接続'][i],ico:'⚡',description:'すべての施設の生産量 ×1.5',cost:[3e4,7e6,8e9,2e13,4e17][i],unlocked:s=>s.buildings.reduce((a,b)=>a+b,0)>=n,kind:'global',factor:1.5}));
+UPG.push({id:'clickcps',name:'クリックの強化連携',ico:'✋',description:'クリック時に、毎秒生産の2%を追加獲得',cost:2e5,unlocked:s=>s.lifetime>=50000,kind:'clickcps'});
+const ACH=[['first','はじめての一手',s=>s.clicks>=1],['hundred','クリック100回',s=>s.clicks>=100],['firstbuild','自動化開始',s=>s.buildings[0]>=1],['ten','施設10台',s=>totalOwned(s)>=10],['fifty','施設50台',s=>totalOwned(s)>=50],['hundredb','施設100台',s=>totalOwned(s)>=100],['fivehundred','施設500台',s=>totalOwned(s)>=500],['script','次の段階',s=>s.buildings[1]>=1],['server','サーバー開業',s=>s.buildings[3]>=1],['datacenter','巨大化',s=>s.buildings[5]>=1],['space','情報の宇宙へ',s=>s.buildings[13]>=1],['oneK','累計'+format(1e3),s=>s.lifetime>=1e3],['million','累計'+format(1e6),s=>s.lifetime>=1e6],['billion','累計'+format(1e9),s=>s.lifetime>=1e9],['trillion','累計'+format(1e12),s=>s.lifetime>=1e12],['upgrade','最初の強化',s=>s.upgrades.length>=1],['upgTen','強化10個',s=>s.upgrades.length>=10],['power','毎秒'+format(1e6),s=>cps(s)>=1e6]];
+
+const fresh=()=>({version:1,created:Date.now(),lastSaved:Date.now(),balance:0,lifetime:0,lifetimeClicks:0,clicks:0,buildings:BUILDINGS.map(()=>0),upgrades:[],achievements:[],settings:{reduceMotion:false},totalBonus:0,logs:['ゲーム開始。最初の施設を目指そう。']});
+const safeNumber=(v,max=1e303)=>typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=max;
+function validate(o){if(!o||typeof o!=='object'||o.version!==1||!safeNumber(o.balance)||!safeNumber(o.lifetime)||o.balance>o.lifetime+1e-6*Math.max(1,o.lifetime)||!safeNumber(o.lifetimeClicks)||!safeNumber(o.clicks)||!Array.isArray(o.buildings)||o.buildings.length!==BUILDINGS.length||o.buildings.some(x=>!Number.isSafeInteger(x)||x<0||x>1000000)||!Array.isArray(o.upgrades)||o.upgrades.length>UPG.length||o.upgrades.some(x=>typeof x!=='string'||!UPG.some(u=>u.id===x))||!Array.isArray(o.achievements)||o.achievements.some(x=>!ACH.some(a=>a[0]===x))||!safeNumber(o.lastSaved,1e15)||!safeNumber(o.created,1e15))throw Error('保存データが破損しているか、この版には対応していません。');const s={...fresh(),...o};s.upgrades=[...new Set(o.upgrades)];s.achievements=[...new Set(o.achievements)];s.settings={reduceMotion:!!o.settings?.reduceMotion};s.logs=Array.isArray(o.logs)?o.logs.slice(-6).filter(x=>typeof x==='string'&&x.length<150):[];s.totalBonus=safeNumber(o.totalBonus)?o.totalBonus:0;return s}
+
+const fmtTime=s=>{if(!Number.isFinite(s)||s>86400*365)return 'かなり先';s=Math.max(0,Math.ceil(s));if(s<60)return s+'秒';if(s<3600)return Math.floor(s/60)+'分'+(s%60?String(s%60).padStart(2,'0')+'秒':'');if(s<86400)return Math.floor(s/3600)+'時間'+Math.floor(s%3600/60)+'分';return Math.floor(s/86400)+'日'};
+const price=(i,owned)=>BUILDINGS[i][2]*Math.pow(1.15,owned);const countCost=(i,qty)=>{if(!qty)return 0;let p=price(i,state.buildings[i]);const pow=Math.pow(1.15,qty);return Number.isFinite(pow)?p*(pow-1)/.15:Infinity};
+function maxBuy(i){let p=price(i,state.buildings[i]);if(p>state.balance)return 0;let q=Math.floor(Math.log1p(state.balance*.15/p)/Math.log(1.15));q=Math.max(1,Math.min(q,100000));while(q>0&&countCost(i,q)>state.balance*(1+1e-12))q--;while(q<100000&&countCost(i,q+1)<=state.balance*(1+1e-12))q++;return q}
+function calc(s=state){let global=1;for(let u of UPG)if(u.kind==='global'&&s.upgrades.includes(u.id))global*=u.factor;let rows=BUILDINGS.map((b,i)=>{let m=global;for(let u of UPG)if(u.kind==='building'&&u.building===i&&s.upgrades.includes(u.id))m*=u.factor;return s.buildings[i]*b[3]*m});return{rows,total:rows.reduce((a,b)=>a+b,0)}}
+function cps(s=state){return calc(s).total}
+function clickPower(){let m=1;for(let u of UPG)if(u.kind==='click'&&state.upgrades.includes(u.id))m*=u.factor;return m+(state.upgrades.includes('clickcps')?cps()*.02:0)}
+function totalOwned(s=state){return s.buildings.reduce((a,b)=>a+b,0)}
+function nextOwnedCost(i){let qty=mode==='max'?maxBuy(i):Number(mode);return {qty,cost:countCost(i,qty)}}
+
+function log(msg){state.logs.unshift(msg);state.logs=state.logs.slice(0,5)}
+function gain(n,fromClick=false){if(!safeNumber(n)||n===0)return;state.balance=Math.min(1e303,state.balance+n);state.lifetime=Math.min(1e303,state.lifetime+n);if(fromClick)state.lifetimeClicks+=n}
+
+  function buy(i) {
+    const { qty, cost } = nextOwnedCost(i);
+    if (qty <= 0 || !Number.isFinite(cost) || cost > state.balance * (1 + 1e-12)) return;
+    const increase = BUILDINGS[i][3] * getBuildingMultiplier(i) * qty;
+    state.balance = Math.max(0, state.balance - cost);
+    state.buildings[i] += qty;
+    const purchase = BUILDINGS[i][0] + " ×" + format(qty);
+    log(purchase + " を購入");
+    checkAchievements();
+    toast(purchase + " · +" + format(increase, "decimal") + " / 秒");
+    save();
+    render(true);
+  }
+
+  function buyUpgrade(id) {
+    const u = UPG.find(x => x.id === id);
+    if (!u || state.upgrades.includes(id) || !u.unlocked(state) || state.balance < u.cost) return;
+    const isClick = u.kind === "click" || u.kind === "clickcps";
+    const before = isClick ? clickPower() : cps();
+    state.balance -= u.cost;
+    state.upgrades.push(id);
+    const after = isClick ? clickPower() : cps();
+    log("強化：" + u.name);
+    checkAchievements();
+    toast("✓ " + u.name + " · " + format(before, "decimal") + " → " + format(after, "decimal") + (isClick ? " / 生成" : " / 秒"));
+    save();
+    render(true);
+  }
+function checkAchievements(){for(let [id,title,test] of ACH){if(!state.achievements.includes(id)&&test(state)){state.achievements.push(id);if(id!=='first')toast('実績解除：'+title)}}}
+function giveBonus(){if(!bonusActive)return;bonusActive=false;$('bonusButton').hidden=true;const x=Math.max(50,cps()*50,clickPower()*20);gain(x);state.totalBonus+=x;log('ボーナスデータを獲得 +'+format(x));toast('✦ ボーナスデータ +'+format(x));nextBonus=Date.now()+50000+Math.random()*45000;save();render(true)}
+function runTimer(){let t=Date.now();let dt=Math.max(0,Math.min((t-lastAuto)/1000,24*3600));lastAuto=t;if(dt>0){gain(cps()*dt)}if(t>nextBonus&&!bonusActive){bonusActive=true;bonusExpiry=t+14000;$('bonusButton').hidden=false}if(bonusActive&&t>bonusExpiry){bonusActive=false;$('bonusButton').hidden=true;nextBonus=t+50000+Math.random()*45000}if(t-lastChart>2500){history.push(cps());if(history.length>55)history.shift();lastChart=t;paintChart()}if(t-lastPaint>210){render(false);lastPaint=t}}
+function paintChart(){let d=history.length>1?history:[0,0];let max=Math.max(1,...d);let pts=d.map((x,i)=>(i/(d.length-1)*420).toFixed(1)+','+(138-(x/max)*112).toFixed(1));$('chartLine').setAttribute('d','M'+pts.join('L'));$('chartArea').setAttribute('d','M0 150 L'+pts.join('L')+' L420 150 Z')}
+function unlockedCount(){let max=0;for(let i=0;i<BUILDINGS.length;i++){if(i===0||state.lifetime>=BUILDINGS[i][2]*.45||state.buildings[i]>0)max=i}return max}
+
+function getBuildingMultiplier(i){let out=1;for(let u of UPG)if(state.upgrades.includes(u.id)&&(u.kind==='global'||u.kind==='building'&&u.building===i))out*=u.factor;return out}
+function escapeHTML(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function save(){try{let data={...state,lastSaved:Date.now()};let old=localStorage.getItem(KEY);if(old&&Date.now()-(Number(localStorage.getItem(KEY+'-backup-at'))||0)>120000){localStorage.setItem(BACKUP,old);localStorage.setItem(KEY+'-backup-at',String(Date.now()))}localStorage.setItem(KEY,JSON.stringify(data));state.lastSaved=data.lastSaved;setSaveStatus(true);return true}catch(e){setSaveStatus(false);return false}}
+function recover(){
+  try{
+    const raw=localStorage.getItem(KEY);
+    if(raw){
+      const s=validate(JSON.parse(raw));
+      const gap=Math.min(24*3600,Math.max(0,(Date.now()-s.lastSaved)/1000));
+      state=s;
+      if(gap>=10){const earn=Math.max(0,cps()*gap);gain(earn);log(`不在中 ${fmtTime(gap)}：+${format(earn)}`);setTimeout(()=>toast(`おかえりなさい！ +${format(earn)} データ`),500)}
+      return;
+    }
+  }catch(e){
+    try{
+      const backup=localStorage.getItem(BACKUP);
+      if(backup){state=validate(JSON.parse(backup));setTimeout(()=>toast('保存が読めないため、前回のバックアップを読み込みました'),400);return}
+    }catch(_){}
+    state=fresh();setTimeout(()=>toast('保存データを確認できません。設定からJSONを取り込めます'),500);return;
+  }
+  state=fresh();
+}
+
+  const icon = '<svg viewBox="0 0 48 48" aria-hidden="true"><use href="#data-symbol"/></svg>';
+  const facilityMarks = ["⌘", "›_", "◈", "▤", "↗", "▦", "▥", "⛶", "✦", "≋", "⟲", "◇", "◎", "✧"];
+  const stores = [
+    { list: $("buildingList"), pager: $("buildingPages"), title: $("buildingTitle"), page: 0 },
+    { list: $("upgradeList"), pager: $("upgradePages"), title: $("upgradeTitle"), page: 0 }
+  ];
+  const settingsDialog = $("dialog");
+
+  function format(value, style = "integer") {
+    if (Number.isNaN(value)) return "—";
+    if (!Number.isFinite(value)) return value === Infinity ? "∞" : value === -Infinity ? "−∞" : "—";
+    const sign = value < 0 ? "−" : "";
+    const n = Math.abs(value);
+    if (n === 0) return "0";
+    if (style === "decimal" && n < 0.1) return sign + "<0.1";
+    if (n < 10000) {
+      const rounded = style === "decimal" ? Math.round(n * 10) / 10
+        : Math.floor(style === "price" ? n + n * Number.EPSILON * 4 : n);
+      if (rounded < 10000) return sign + (style === "decimal" ? tenth : whole).format(rounded);
+    }
+    if (n < 1e8 && Math.round(n / 1000) < 100000) return sign + tenth.format(n / 10000) + "万";
+    if (n < 1e9) {
+      return sign + (Math.round(n / 1e7) < 100 ? tenth.format(n / 1e8) + "億" : "1.00e9");
+    }
+    return sign + n.toExponential(2).replace("e+", "e");
+  }
+
+  function htmlNum(value, style) {
+    return escapeHTML(format(value, style));
+  }
+
+  function setText(element, text) {
+    if (element.textContent !== text) element.textContent = text;
+  }
+
+  function setSaveStatus(saved) {
+    const status = $("saveStatus");
+    setText(status, saved ? "保存済み" : "保存不可");
+    status.dataset.state = saved ? "saved" : "failed";
+    status.title = saved ? "自動保存" : "JSONで保存できます";
+  }
+
+  function toast(message) {
+    const area = $("toasts");
+    while (area.children.length >= 3) area.firstElementChild.remove();
+    const note = document.createElement("div");
+    note.className = "toast";
+    note.textContent = message;
+    area.append(note);
+    setTimeout(() => note.remove(), 2200);
+  }
+
+  function click() {
+    const amount = clickPower();
+    gain(amount, true);
+    state.clicks++;
+    if (!state.settings.reduceMotion && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const hero = $("hero");
+      const previous = hero.querySelectorAll(".float");
+      if (previous.length >= 5) previous[0].remove();
+      const float = document.createElement("span");
+      float.className = "float";
+      float.textContent = "+" + format(amount, "decimal");
+      float.setAttribute("aria-hidden", "true");
+      hero.append(float);
+      setTimeout(() => float.remove(), 520);
+    }
+    checkAchievements();
+    render(true);
+  }
+
+  function render(force = false) {
+    setText($("balance"), format(state.balance));
+    setText($("rate"), format(cps(), "decimal"));
+    setText($("lifetime"), format(state.lifetime));
+    setText($("ownedTotal"), format(totalOwned()));
+    setText($("clickValue"), "+" + format(clickPower(), "decimal"));
+    const now = Date.now();
+    if (force || now - lastShopPaint >= 500) {
+      renderShops();
+      lastShopPaint = now;
+    }
+  }
+
+  function renderShops() {
+    const lastUnlocked = unlockedCount();
+    const buildings = BUILDINGS.slice(0, lastUnlocked + 2).map((_, i) => i);
+    const upgrades = UPG.filter(u => !state.upgrades.includes(u.id) && u.unlocked(state))
+      .sort((a, b) => Number(state.balance >= b.cost) - Number(state.balance >= a.cost) || a.cost - b.cost);
+    const ready = upgrades.filter(u => state.balance >= u.cost).length;
+    for (const id of ["upgradeCount", "compactUpgradeCount"]) {
+      const count = $(id);
+      setText(count, format(ready));
+      count.classList.toggle("ready", ready > 0);
+    }
+    showPage(stores[0], buildings, i => buildingRow(i, lastUnlocked));
+    showPage(stores[1], upgrades, upgradeRow,
+      state.upgrades.length === UPG.length ? "✓ 強化完了" : "未解放");
+  }
+
+  function buildingRow(i, lastUnlocked) {
+    const [name, , baseCost, rate] = BUILDINGS[i];
+    const mark = '<span class="row-icon" aria-hidden="true">' + facilityMarks[i] + "</span>";
+    if (i > lastUnlocked) {
+      return '<div class="shop-row locked">' + mark + '<span class="row-main"><span class="row-name">' +
+        escapeHTML(name) + '</span><span class="row-effect">累計 ' + htmlNum(baseCost * .45, "price") +
+        '</span></span><span class="row-values"><span class="row-count">未解放</span></span></div>';
+    }
+    const { qty, cost } = nextOwnedCost(i);
+    const ready = qty > 0 && Number.isFinite(cost) && cost <= state.balance * (1 + 1e-12);
+    const amount = mode === "max" ? "最大 " + htmlNum(qty) : "×" + htmlNum(qty);
+    const effect = htmlNum(rate * getBuildingMultiplier(i) * Math.max(1, qty), "decimal") + " / 秒";
+    const shownCost = qty ? cost : price(i, state.buildings[i]);
+    return shopRow("building-" + i, mark, name, "+" + effect,
+      "所持 " + htmlNum(state.buildings[i]), amount, shownCost, ready);
+  }
+
+  function upgradeRow(u) {
+    const factor = u.factor ? " ×" + format(u.factor, "decimal") : "";
+    const effect = {
+      click: "基本生成" + factor,
+      building: u.kind === "building" ? BUILDINGS[u.building][0] + factor : "",
+      global: "全施設" + factor,
+      clickcps: "生成 + 毎秒生産の2%"
+    }[u.kind];
+    const mark = '<span class="row-icon upgrade-icon" aria-hidden="true">↑</span>';
+    return shopRow("upgrade-" + u.id, mark, u.name, escapeHTML(effect), "", "", u.cost, state.balance >= u.cost);
+  }
+
+  function shopRow(id, mark, name, effect, count, amount, cost, ready) {
+    return '<button type="button" class="shop-row' + (ready ? " ready" : "") + '" data-buy="' + id +
+      '" aria-disabled="' + !ready + '">' + mark +
+      '<span class="row-main"><span class="row-name">' + escapeHTML(name) +
+      '</span><span class="row-effect">' + effect + '</span></span><span class="row-values">' +
+      (count ? '<span class="row-count">' + count + '</span>' : "") +
+      '<span class="row-cost">' + (amount ? '<span class="row-qty">' + amount + '</span>' : "") +
+      (ready ? '<span class="ready-mark" aria-hidden="true">＋</span>' : "") +
+      '<span class="sr-only"> 価格 </span>' + icon + '<span>' + htmlNum(cost, "price") +
+      '</span><span class="sr-only"> データ</span></span></span></button>';
+  }
+
+  function showPage(store, items, makeRow, empty = "") {
+    const { list, pager, title } = store;
+    const height = list.clientHeight;
+    if (height === 0) return;
+    const style = getComputedStyle(list);
+    const row = parseFloat(style.gridAutoRows);
+    const gap = parseFloat(style.rowGap) || 0;
+    const perPage = Math.max(1, Math.floor((height + gap) / (row + gap)));
+    const pages = Math.max(1, Math.ceil(items.length / perPage));
+    store.page = Math.min(pages - 1, Math.max(0, store.page));
+    const start = store.page * perPage;
+    const markup = items.length ? items.slice(start, start + perPage).map(makeRow).join("")
+      : '<div class="empty-store">' + empty + '</div>';
+    if (store.markup !== markup) {
+      const focus = list.contains(document.activeElement) && document.activeElement.dataset.buy;
+      list.innerHTML = markup;
+      store.markup = markup;
+      if (focus) {
+        const next = [...list.querySelectorAll("[data-buy]")].find(row => row.dataset.buy === focus);
+        (next || list.querySelector("[data-buy]") || title).focus({ preventScroll: true });
+      }
+    }
+    const focused = document.activeElement;
+    const active = pager.contains(focused);
+    const [previous, next] = pager.querySelectorAll("[data-page]");
+    const selector = pager.querySelector("[data-page-select]");
+    previous.disabled = store.page === 0;
+    next.disabled = store.page >= pages - 1;
+    pager.classList.toggle("inactive", pages <= 1);
+    if (selector.options.length !== pages) {
+      const total = format(pages);
+      selector.replaceChildren(...Array.from({ length: pages }, (_, i) => new Option(format(i + 1) + " / " + total, String(i))));
+    }
+    if (selector.selectedIndex !== store.page) selector.selectedIndex = store.page;
+    if (active && (focused.disabled || pages <= 1)) {
+      (pages <= 1 ? title : selector).focus({ preventScroll: true });
+    }
+  }
+
+  function openModal(title, content) {
+    setText($("dialogTitle"), title);
+    $("modalContent").innerHTML = content;
+    if (!settingsDialog.open) settingsDialog.showModal();
+    else $("modalContent").querySelector("textarea, button, input")?.focus();
+  }
+
+  function exportSave() {
+    save();
+    const blob = new Blob([JSON.stringify({ ...state, lastSaved: Date.now() }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "infra-lab-data-clicker-base-02-save.json";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function applyMotionSetting() {
+    document.documentElement.classList.toggle("reduce-motion", state.settings.reduceMotion);
+  }
+
+  function showSettings() {
+    openModal("保存・設定",
+      '<p class="subtle">5秒ごとに自動保存</p><div class="modal-actions">' +
+      '<button type="button" id="exportSave">JSONを保存</button><button type="button" id="importSave">JSONを読み込む</button>' +
+      '<button type="button" id="restoreBackup">バックアップから復旧</button></div>' +
+      '<label class="check"><input type="checkbox" id="reduceMotion"> 動きを減らす</label>' +
+      '<button type="button" class="danger" id="resetGame">データを初期化</button><p class="error" role="alert" id="modalError"></p>');
+    $("reduceMotion").checked = state.settings.reduceMotion;
+    $("reduceMotion").onchange = event => {
+      state.settings.reduceMotion = event.target.checked;
+      applyMotionSetting();
+      save();
+    };
+    $("exportSave").onclick = exportSave;
+    $("importSave").onclick = showImporter;
+    $("restoreBackup").onclick = () => {
+      try {
+        const raw = localStorage.getItem(BACKUP);
+        if (!raw) throw new Error();
+        confirmImport(validate(JSON.parse(raw)), "バックアップから復旧");
+      } catch {
+        setText($("modalError"), "読み込めるバックアップがありません。");
+      }
+    };
+    $("resetGame").onclick = () => {
+      openModal("データを初期化", '<p>現在の Base 0.2 の進行を消去します。</p><div class="modal-actions">' +
+        '<button type="button" id="modalBack">戻る</button><button type="button" class="danger" id="checkReset">初期化に進む</button></div>');
+      $("modalBack").onclick = showSettings;
+      $("checkReset").onclick = () => {
+        openModal("初期化の確認", '<p>Base 0.2 を最初から始めますか？</p><div class="modal-actions">' +
+          '<button type="button" id="modalBack">戻る</button><button type="button" class="danger" id="confirmReset">初期化する</button></div>');
+        $("modalBack").onclick = showSettings;
+        $("confirmReset").onclick = () => {
+          state = fresh();
+          finishRestore("初期化しました");
+        };
+      };
+    };
+  }
+
+  function showImporter() {
+    openModal("JSONを読み込む",
+      '<label for="saveFile">保存ファイル</label><input type="file" id="saveFile" accept=".json,application/json">' +
+      '<label for="saveText">またはJSONを貼り付け</label><textarea id="saveText" rows="4" spellcheck="false"></textarea>' +
+      '<div class="modal-actions"><button type="button" id="modalBack">戻る</button>' +
+      '<button type="button" id="checkImport">内容を確認</button></div><p class="error" role="alert" id="modalError"></p>');
+    $("modalBack").onclick = showSettings;
+    $("checkImport").onclick = async () => {
+      const field = $("saveText");
+      const file = $("saveFile").files[0];
+      const error = $("modalError");
+      try {
+        if (field.value.length > 2e6 || file?.size > 2e6) throw new Error();
+        const raw = field.value.trim() || (file ? await file.text() : "");
+        if (settingsDialog.open && field.isConnected) confirmImport(validate(JSON.parse(raw)), "保存データの確認");
+      } catch {
+        setText(error, "読み込めない保存データです。");
+      }
+    };
+  }
+
+  function confirmImport(imported, title) {
+    openModal(title, '<dl class="stats"><div><dt>データ</dt><dd>' + htmlNum(imported.balance) +
+      '</dd></div><div><dt>施設数</dt><dd>' + htmlNum(totalOwned(imported)) +
+      '</dd></div></dl><p>現在の Base 0.2 の進行を置き換えます。</p><div class="modal-actions">' +
+      '<button type="button" id="modalBack">戻る</button><button type="button" id="confirmImport">読み込む</button></div>');
+    $("modalBack").onclick = showSettings;
+    $("confirmImport").onclick = () => {
+      try {
+        localStorage.setItem(BACKUP, JSON.stringify(state));
+        localStorage.setItem(KEY + "-backup-at", String(Date.now()));
+      } catch {}
+      state = imported;
+      finishRestore("保存データを読み込みました");
+    };
+  }
+
+  function finishRestore(message) {
+    state.lastSaved = Date.now();
+    lastAuto = state.lastSaved;
+    history.length = 0;
+    for (const store of stores) store.page = 0;
+    applyMotionSetting();
+    save();
+    paintChart();
+    settingsDialog.close();
+    render(true);
+    toast(message);
+  }
+
+  function showStats() {
+    const achievements = ACH.map(([id, title]) => {
+      const done = state.achievements.includes(id);
+      return '<span class="achievement' + (done ? "" : " locked") + '">' + (done ? "✓ " : "○ ") + escapeHTML(title) + "</span>";
+    }).join("");
+    const metrics = [
+      ["累計データ", state.lifetime], ["クリック数", state.clicks], ["クリック産出", state.lifetimeClicks],
+      ["ボーナス産出", state.totalBonus], ["施設数", totalOwned()], ["強化数", state.upgrades.length]
+    ];
+    openModal("記録", '<dl class="stats">' +
+      metrics.map(([label, value]) => "<div><dt>" + label + "</dt><dd>" + htmlNum(value) + "</dd></div>").join("") +
+      '</dl><h3>実績 ' + htmlNum(state.achievements.length) + ' / ' + htmlNum(ACH.length) +
+      '</h3><div class="achievements">' + achievements + '</div>');
+  }
+
+  function init() {
+    recover();
+    applyMotionSetting();
+    $("clickButton").onclick = click;
+    $("bonusButton").onclick = giveBonus;
+    $("settingsButton").onclick = showSettings;
+    $("statsButton").onclick = showStats;
+    $("closeModal").onclick = () => settingsDialog.close();
+
+    document.addEventListener("keydown", event => {
+      if (event.code !== "Space" || event.repeat || event.defaultPrevented || settingsDialog.open ||
+        event.target.closest("button, input, textarea, select, summary, a, [contenteditable]")) return;
+      event.preventDefault();
+      click();
+    });
+
+    const bulkButtons = document.querySelectorAll("[data-bulk]");
+    for (const button of bulkButtons) {
+      button.onclick = () => {
+        mode = button.dataset.bulk;
+        for (const choice of bulkButtons) choice.setAttribute("aria-pressed", String(choice === button));
+        render(true);
+      };
+    }
+    for (const store of stores) {
+      store.list.onclick = event => {
+        const row = event.target.closest("[data-buy]");
+        if (!row || row.getAttribute("aria-disabled") === "true") return;
+        const id = row.dataset.buy;
+        if (id.startsWith("building-")) {
+          const i = Number(id.slice(9));
+          if (i <= unlockedCount()) buy(i);
+        } else {
+          buyUpgrade(id.slice(8));
+        }
+      };
+      store.pager.onclick = event => {
+        const arrow = event.target.closest("[data-page]");
+        if (!arrow || arrow.disabled) return;
+        store.page += Number(arrow.dataset.page);
+        render(true);
+      };
+      store.pager.querySelector("[data-page-select]").onchange = event => {
+        store.page = event.target.selectedIndex;
+        render(true);
+      };
+    }
+    for (const [id, view] of [["showBuildings", "buildings"], ["showUpgrades", "upgrades"]]) {
+      $(id).onclick = () => {
+        $("workspace").dataset.view = view;
+        $("showBuildings").setAttribute("aria-pressed", String(view === "buildings"));
+        $("showUpgrades").setAttribute("aria-pressed", String(view === "upgrades"));
+        render(true);
+      };
+    }
+    window.addEventListener("resize", () => render(true));
+    window.addEventListener("beforeunload", save);
+    document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
+    lastAuto = lastChart = Date.now();
+    render(true);
+    paintChart();
+    setInterval(runTimer, 70);
+    setInterval(save, 5000);
+  }
+
+  init();
+
+})();
+  </script>
+</body>
+</html>
